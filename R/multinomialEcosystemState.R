@@ -886,16 +886,16 @@ fitMultinomialEcosystemState <- function(
 #' current graphical device.
 #'
 #' @param x an object of class "PaGAnmesm"
-#' @param form formula, such as y ~ pred, specifying variables to be plotted
-#' @param yaxis vector of values to be marked on y-axis
+#' @param form formula, such as y ~ pred, specifying variables to be plotted. By
+#' default the first predictor is plotted on x axis.
+#' @param byChain logical value indicating whether to plot states for each chain
 #' @param transCol logical value indicating usage of transparent colours
 #' @param addWAIC logical value indication display of WAIC in upper right corner of the plot
 #' @param setCol vector of colours to be used for states
 #' @param drawAxes logical value indicating whether values should be marked on axes
 #' @param SDmult scalar multiplying visualized standard deviation (to make lines for small standard deviation visible)
-#' @param byChain logical value indicating whether to plot states for each chain
 #' @param xlab a label for the x axis, defaults to predictor name.
-#' @param ylab a label for the x axis, defaults to "Response".
+#' @param ylab a label for the y axis, defaults to response name.
 #' @param ... additional arguments passed to plot
 #'
 #' @return Returns invisibly a list containing posterior means of state value
@@ -904,19 +904,29 @@ fitMultinomialEcosystemState <- function(
 #' @author Adam Klimes
 #' @export
 #'
-plot.PaGAnmesm <- function(x, form, yaxis, transCol = TRUE, addWAIC = FALSE,
+plot.PaGAnmesm <- function(x, form = NULL, byChains = TRUE, transCol = TRUE, addWAIC = FALSE,
                       setCol = c("#1b9e77", "#d95f02", "#7570b3", "#e7298a", "#66a61e"),
-                      drawAxes = TRUE, SDmult = 1, byChains = TRUE, xlab = NULL, ylab = "Response", ...) {
-  resp <- x$data[[1]]
-  dat <- data.frame(x$data, x$constants[sapply(x$constants, length) ==
-                                              length(resp)])
+                      drawAxes = TRUE, SDmult = 1, xlab = NULL, ylab = NULL, ...) {
+  # input check
+  form <- if (is.null(form)) formula(paste(names(x$data), "~", names(x$constants)[4])) else formula(form)
   svar <- labels(terms(form))
-  svar <- svar[svar %in% names(dat)]
+  if (length(svar) > 1) stop("Specify only one predictor in 'form'")
+  if (!all.vars(form)[1] %in% names(x$data)) stop("Response specified in 'form' does not match 'mod'")
+  if (!svar %in% names(x$constants)) stop("Predictor specified in 'form' does not match 'mod'")
+  if (!is.logical(byChains)) stop("'byChains' has to be logical")
+  if (!is.logical(transCol)) stop("'transCol' has to be logical")
+  if (!is.logical(addWAIC)) stop("'addWAIC' has to be logical")
+  if (!is.logical(drawAxes)) stop("'drawAxes' has to be logical")
+  if (!is.numeric(SDmult)) stop("'SDmult' has to be numeric")
+  #_
+  resp <- x$data[[1]]
+  dat <- data.frame(x$data,
+    x$constants[vapply(x$constants, length, FUN.VALUE = 1) == length(resp)])
   if (is.null(xlab)) xlab <- svar
+  if (is.null(ylab)) ylab <- names(x$data)
   auxRange <- max(resp) - min(resp)
   invlink <- switch(as.character(x$linkFunction), identity = function(x) x, log = exp,
                     logit = function(x) exp(x)/(1+exp(x)))
-  par(mai = c(0.8,0.8,0.1,0.1))
   plot(form, data = dat, ylim = c(min(resp) - 0.05 * auxRange, max(resp) + 0.3 * auxRange),
        yaxs = "i", axes = FALSE, ann = FALSE, ...)
   usr <- par("usr")
@@ -925,6 +935,7 @@ plot.PaGAnmesm <- function(x, form, yaxis, transCol = TRUE, addWAIC = FALSE,
   axis(1, labels = xlab, at = mean(usr), line = 2, tick = FALSE)
   if (drawAxes) {
     axis(1)
+    yaxis <- head(axTicks(2), -1)
     axis(2, labels = yaxis, at = yaxis, las = 2)
   }
   axis(2, labels = 0:1, at = max(resp) + c(0.1, 0.25) * auxRange, las = 2)
@@ -991,7 +1002,13 @@ plot.PaGAnmesm <- function(x, form, yaxis, transCol = TRUE, addWAIC = FALSE,
 #' @author Adam Klimes
 #' @export
 #'
-summary.PaGAnmesm <- function(object, byChains = FALSE, digit = 4, absInt = FALSE, randomSample = NULL){
+summary.PaGAnmesm <- function(object, byChains = FALSE, digit = 4L, absInt = FALSE, randomSample = NULL){
+  # input check
+  if (!is.logical(byChains)) stop("'byChains' has to be logical")
+  if (!(is.numeric(digit) | is.null(digit))) stop("'digit' has to be NULL or numeric")
+  if (!is.logical(absInt)) stop("'absInt' has to be logical")
+  if (!(is.numeric(randomSample) | is.null(randomSample))) stop("'randomSample' has to be NULL or numeric")
+  #_
   varsSamples <- lapply(object$mcmcSamples$samples,
     function(x) x[, !grepl(paste0("^lifted|^linState|^", names(object$data)), colnames(x))])
   if (!byChains) varsSamples <- list(do.call(rbind, varsSamples))
@@ -1022,7 +1039,7 @@ summary.PaGAnmesm <- function(object, byChains = FALSE, digit = 4, absInt = FALS
 #' @param newdata dataframe of predictor values of ecosystems to be predicted.
 #'   If it contains column with response variable, obsDat is returned.
 #'   If not provided, prediction is done for modelled data.
-#' @param samples number of samples to take along the respons variable
+#' @param samples number of samples to take along the response variable
 #' @param threshold number from 0 to 1 denoting how pronounced stable states should be marked as considerable
 #'
 #' @return A list containing the following components:
@@ -1039,6 +1056,9 @@ summary.PaGAnmesm <- function(object, byChains = FALSE, digit = 4, absInt = FALS
 #' @export
 #'
 predict.PaGAnmesm <- function(mod, newdata = NULL, samples = 1000, threshold = 0.2){
+  # input check
+  if (!(is.null(newdata) | is.data.frame(newdata))) stop("'newdata' has to be NULL or data.frame")
+  #_
   respVal <- NULL
   if (names(mod$data) %in% colnames(newdata)) {
     respVal <- newdata[, names(mod$data)]
@@ -1048,15 +1068,15 @@ predict.PaGAnmesm <- function(mod, newdata = NULL, samples = 1000, threshold = 0
     respVal <- mod$data[[1]]
     newdata <- as.data.frame(mod$constants[-(1:3)])
   }
-  form <- formula(paste("~", colnames(newdata)[1]))
-  slices <- sliceMESM(form, mod, value = newdata, byChains = FALSE, doPlot = FALSE, samples = samples)
+  form <- formula(paste(names(mod$data), "~", colnames(newdata)[1]))
+  slices <- sliceMESM(mod, form, value = newdata, byChains = FALSE, doPlot = FALSE, samples = samples)
   tipStableAll <- getMinMax(slices, threshold)
   tipStable <- tipStableAll$tipStable[[1]]
   probCurve <- data.frame(tipStableAll$matsSt[[1]])
   resp <- slices$resp
   auxFn <- function(x){
     dist <- abs(resp - x)
-    which(dist == min(dist))
+    which(dist == min(dist))[1]
   }
   potentEn <- unlist(Map(function(x, y) -x[y]+1, probCurve, vapply(respVal, auxFn, FUN.VALUE = 1)))
   auxDist <- function(x, target) min(abs(x - target))
@@ -1211,6 +1231,8 @@ findMin <- function(x, extremes = TRUE){
 #' @keywords internal
 #'
 getMinMax <- function(slices, threshold = 0.0){
+  if (!is.numeric(threshold)) stop("'threshold' has to be numeric")
+  if (threshold > 1) warning("maximum value for 'threshold' is 1")
   getMin <- function(x, resp, extremes = TRUE, inv = FALSE) {
     id <- findMin(x, extremes = extremes)
     respOut <- resp[id] * (1 - id %% 1) + resp[min(id + 1, length(resp))] * id %% 1
@@ -1264,8 +1286,8 @@ getMinMax <- function(slices, threshold = 0.0){
 #'
 #' @description This function plots probability density for given predictor value
 #'
-#' @param form formula with one predictor specifying which variables to plot
 #' @param mod an object of class "PaGAnmesm"
+#' @param form formula with one predictor specifying which variables to plot
 #' @param value numeric vector of values of the preditor specified by
 #'   \code{"form"} where the slice is done or data.frame with values of predictors
 #'   in named columns
@@ -1286,14 +1308,30 @@ getMinMax <- function(slices, threshold = 0.0){
 #' @author Adam Klimes
 #' @export
 #'
-sliceMESM <- function(form, mod, value = 0, byChains = TRUE, xlab = "", doPlot = TRUE,
+sliceMESM <- function(mod, form = NULL, value = 0, byChains = TRUE, xlab = names(mod$data), doPlot = TRUE,
                       setCol = c("#1b9e77", "#d95f02", "#7570b3", "#e7298a", "#66a61e"),
                       plotEst = TRUE, xaxis = TRUE, addEcos = FALSE, ecosTol = 0.1,
                       samples = 1000, randomSample = NULL, getParsD = FALSE){
+  # input check
+  if (!inherits(mod, "PaGAnmesm")) stop("'mod' must be an object of class 'PaGAnmesm'")
+  form <- if (is.null(form)) formula(paste(names(mod$data), "~", names(mod$constants)[4])) else formula(form)
+  svar <- labels(terms(form))
+  if (length(svar) > 1) stop("Specify only one predictor in 'form'")
+  if (!all.vars(form)[1] %in% names(mod$data)) stop("Response specified in 'form' does not match 'mod'")
+  if (!svar %in% names(mod$constants)) stop("Predictor specified in 'form' does not match 'mod'")
+  if (!(is.numeric(value) | is.data.frame(value))) stop("'value' has to be a numeric or data.frame")
+  if (is.data.frame(value)) if (any(!colnames(value) %in% names(mod$constants))) stop("colnames of 'value' do not match 'mod'")
+  if (!is.logical(doPlot)) stop("'doPlot' has to be logical")
+  if (!is.logical(plotEst)) stop("'plotEst' has to be logical")
+  if (!is.logical(xaxis)) stop("'xaxis' has to be logical")
+  if (!is.logical(addEcos)) stop("'addEcos' has to be logical")
+  if (!is.numeric(ecosTol)) stop("'ecosTol' has to be numeric")
+  if (!is.numeric(samples)) stop("'samples' has to be numeric")
+  if (!is.logical(getParsD)) stop("'getParsD' has to be logical")
+  #_
   resp <- mod$data[[1]]
   parsTab <- summary(mod, byChains = byChains, absInt = TRUE, digit = NULL, randomSample = randomSample)
   if (is.null(randomSample)) parsTab <- lapply(parsTab, function(x) x[, "mean", drop = FALSE])
-  svar <- labels(terms(form))
   Nstates <- mod$constants$numStates
   invlink <- switch(as.character(mod$linkFunction), identity = function(x) x, log = exp,
                     logit = function(x) exp(x)/(1+exp(x)))
@@ -1358,7 +1396,6 @@ sliceMESM <- function(form, mod, value = 0, byChains = TRUE, xlab = "", doPlot =
     axis(2, las = 2)
     box(bty = "l")
     lapply(densOut, lapply, plotSlice)
-
     if (plotEst) {
       plotEstFn <- function(parsVal){
         rgbVec <- col2rgb(setCol)
@@ -1367,7 +1404,6 @@ sliceMESM <- function(form, mod, value = 0, byChains = TRUE, xlab = "", doPlot =
       }
       lapply(parsValList, lapply, plotEstFn)
     }
-
   }
   invisible(c(densOut, list(resp = xx)))
 }
@@ -1375,26 +1411,32 @@ sliceMESM <- function(form, mod, value = 0, byChains = TRUE, xlab = "", doPlot =
 ### 4.4. ==== Probability landscape from Multinomial Ecosystem State Model ====
 #' @title Plot probability landscape from Multinomial Ecosystem State Model
 #'
-#' @description This function plots probability landscape for given predictor
+#' @description This function plots stability landscape for given predictor
 #'
-#' @param form formula with one predictor specifying which variables to plot
 #' @param mod an object of class "PaGAnmesm"
+#' @param form formula with one predictor specifying which variables to plot
 #' @param threshold numerical value denoting minimum relative
 #'   importance of visualized stable states and tipping points
 #' @param addPoints logical value indicating if ecosystems should be visualized
 #' @param addMinMax logical value indicating if stable states and tipping points should be visualized
 #' @param randomSample integer specifying how many random samples from posterior distribution to take instead of mean. Use \code{"NULL"} for mean.
 #' @param otherPreds named vector of values of predictors not specified by form. Default are zeros
-#' @param scaleDensity logical value indicating if probability density of each slice should be scaled to 0-1
 #' @param ... parameters passed to image()
 #'
-#' @return Returns List of probability density matrices.
+#' @return Returns probability density matrix.
 #'
 #' @author Adam Klimes
 #' @export
 #'
-landscapeMESM <- function(form, mod, threshold = 0, addPoints = TRUE, addMinMax = TRUE, randomSample = NULL, otherPreds = NULL, scaleDensity = TRUE, ...){
+landscapeMESM <- function(mod, form = NULL, threshold = 0, addPoints = TRUE, addMinMax = TRUE, randomSample = NULL, otherPreds = NULL, ...){
+  # input check
+  if (!inherits(mod, "PaGAnmesm")) stop("'mod' must be an object of class 'PaGAnmesm'")
+  form <- if (is.null(form)) formula(paste(names(mod$data), "~", names(mod$constants)[4])) else formula(form)
   svar <- labels(terms(form))
+  if (length(svar) > 1) stop("Specify only one predictor in 'form'")
+  if (!is.logical(addPoints)) stop("'addPoints' has to be logical")
+  if (!is.logical(addMinMax)) stop("'addMinMax' has to be logical")
+  # _
   resp <- mod$data[[1]]
   pred <- mod$constants[[svar]]
   grad <- seq(min(pred), max(pred), length.out = 500)
@@ -1403,12 +1445,11 @@ landscapeMESM <- function(form, mod, threshold = 0, addPoints = TRUE, addMinMax 
                                        dimnames = list(NULL, names(otherPreds))))
     colnames(valueDF)[1] <- svar
   }  else valueDF <- grad
-  slices <- sliceMESM(form, mod, value = valueDF, byChains = FALSE, doPlot = FALSE, randomSample = randomSample)
+  slices <- sliceMESM(mod, form, value = valueDF, byChains = FALSE, doPlot = FALSE, randomSample = randomSample)
   tipStableAll <- getMinMax(slices, threshold)
   tipStable <- tipStableAll$tipStable
-  mats <- tipStableAll$mats
-  matPlot <- if (!is.null(randomSample)) apply(mats, 2, apply, 1, sd) else mats[, , 1]
-  if (scaleDensity) matPlot <- apply(matPlot, 2, function(x) (x - min(x)) / max(x - min(x)))
+  mats <- tipStableAll$matsSt
+  matPlot <- if (!is.null(randomSample)) apply(array(do.call(c, mats), dim = c(dim(mats[[1]]), length(mats))), 2, apply, 1, sd) else mats[[1]]
   image(grad, slices$resp, t(matPlot), ...)
   box()
   plotMinMax <- function(tipStable, xCoors, state, col, cex = 0.5){
@@ -1424,122 +1465,7 @@ landscapeMESM <- function(form, mod, threshold = 0, addPoints = TRUE, addMinMax 
   invisible(mats)
 }
 
-### 4.5. ==== Fit Multinomial Ecosystem State Model using rasters ====
-#' @title NOT UPDATED!! Fit Multinomial Ecosystem State Model using rasters
-#'
-#' @description Wrapper function to fit Multinomial Ecosystem State Model using
-#'raster layers and export results as rasters
-#'
-#' @param resp A raster of response variable
-#' @param preds Named list of rasters used as predictors
-#' @param subsample A scalar denoting number of randomly sampled cells used for modelling. NULL for no subsampling
-#' @param numStates A scalar denoting number of distributions to fit in the mixture
-#' @param stateValError A description of the error distribution and link function to be used
-#' in the model describing the ecosystem state value.  This can be from the \link[stats]{family}
-#' specification or \code{character} scalar with the following possible values: \code{"gaussian"},
-#' \code{"gamma"}, \code{"beta"}, \code{"negbinomial"}, or \code{"betabinomial"}.
-#' @param transResp A function to be used for transformation of response variable
-#' @param mcmcChains An integer scalar giving the number of MCMC chains to use
-#' @param predictFull logical value indicating if full sample should be used for prediction
-#'
-#' @return A list containing the following components:
-#' \itemize{
-#' \item{\code{}}{}
-#' \item{\code{}}{}
-#' }
-#'
-#' @author Adam Klimes
-#' @export
-#'
-fitRasterMESM <- function(resp, preds, subsample = NULL, numStates = 4, stateValError = gaussian,
-                          transResp = function(x) x, mcmcChains = 2, predictFull = FALSE){
-  library(raster) # add to package libraries?
-  library(terra) # add to package libraries?
-  # rasters checking - resolution, extent, projection
-  checkFun <- function(resp, preds, fun) {
-    all(vapply(preds, function(x, ref) identical(fun(x), ref),
-               fun(resp), FUN.VALUE = FALSE))
-  }
-  if (!checkFun(resp, preds, res)) stop("Resolution of rasters has to be identical")
-#  if (!checkFun(resp, preds, terra::ext)) stop("Extent of rasters has to be identical")
-  if (!checkFun(resp, preds, projection)) stop("Projection of rasters has to be identical")
-  # data preparation
-  dat <- data.frame(transResp(terra::values(resp)), lapply(preds, terra::values))
-  names(dat)[1] <- "resp"
-  selID <- which(!apply(is.na(dat), 1, any))
-  if (!is.null(subsample)) selID <- sample(selID, subsample)
-  datSel <- dat[selID, ]
-  st <- function(x, y = x) (x - mean(y)) / sd(y)
-  stinv <- function(x, y) x * sd(y) + mean(y)
-  datSelSt <- data.frame(resp = datSel$resp, lapply(datSel[, -1, drop = FALSE], st))
-  # model preparation
-  form <- formula(paste("resp ~", paste(colnames(dat)[-1], collapse = " + ")))
-  predInit <- lapply(dat[, -1, drop = FALSE], function(x) rep(0.01, numStates))
-  setInit <- c(list(intercept_stateVal = c(0, rep(0.01, numStates - 1)),
-    intercept_statePrec = rep(2, numStates),
-    intercept_stateProb = c(0, rep(0.01, numStates - 1))),
-    predInit, predInit, predInit)
-  names(setInit)[-(1:3)] <- paste0(rep(colnames(dat)[-1], each = 3), c("_stateVal", "_statePrec", "_stateProb"))
-  # model fit
-  mod <- fitMultinomialEcosystemState(
-    stateValModels = form,
-    stateProbModels = form,
-    statePrecModels = form,
-    stateValError = stateValError,
-    inputData = datSelSt,
-    numStates = numStates,
-    mcmcChains = mcmcChains,
-    setInit = setInit,
-    setPriors = list(stateVal = list(int1 = "dnorm(0, 1)", pred = "dnorm(0, 10)"),
-                     statePrec = list(int = "dnorm(0, 1)", pred = "dnorm(0, 10)"))
-  )
-  # results inverse transformation
-  inverseSt.mesm <- function(mod, datOrig){
-    mod$constants[-(1:3)] <- datOrig[-1]
-    getInt <- function(cf, xvars, st){
-      cf[1] + sum(cf[-1] * vapply(xvars, function(x) st(0, x), FUN.VALUE = 1.1))
-    }
-    getSlope <- function(newSlope, xvar){
-      (- newSlope * st(0, xvar)) / stinv(0, xvar)
-    }
-    selState <- function(x, state) x[, grepl(paste0("\\[",state,"\\]$"), colnames(x)), drop = FALSE]
-    auxInvSt <- function(mod, datOrig, stateType, chain) {
-      Nstates <- mod$constants$numStates
-      samp <- mod$mcmcSamples$samples[[chain]]
-      ints <- samp[, paste0("intercept_state", stateType, "[", 1:Nstates, "]"), drop = FALSE]
-      if (stateType == "Val") ints <- t(apply(ints, 1, cumsum))
-      slopes <- samp[, paste0(rep(names(mod$constants)[-(1:3)], each = Nstates), "_state", stateType, "[", 1:Nstates, "]"), drop = FALSE]
-      origInt <- data.frame(lapply(1:Nstates, function(curState, ints, slopes) apply(cbind(selState(ints, curState), selState(slopes, curState)), 1, getInt, xvars = datOrig[, -1, drop = FALSE], st = st), ints, slopes))
-      if (stateType == "Val") origInt <- t(apply(origInt, 1, function(x) x - c(0, head(cumsum(x), -1))))
-      origSlopes <- Map(getSlope, data.frame(samp[, paste0(rep(names(mod$constants)[-(1:3)], each = Nstates), "_state", stateType, "[", 1:Nstates, "]"), drop = FALSE]),
-                        xvar = datOrig[, rep(2:ncol(datOrig), each = Nstates), drop = FALSE])
-      mod$mcmcSamples$samples[[chain]][, paste0("intercept_state", stateType, "[", 1:Nstates, "]")] <- as.matrix(origInt)
-      mod$mcmcSamples$samples[[chain]][, paste0(rep(names(mod$constants)[-(1:3)], each = Nstates), "_state", stateType, "[", 1:Nstates, "]")] <- as.matrix(data.frame(origSlopes))
-      mod
-    }
-    for (chain in seq_along(mod$mcmcSamples$samples)){
-      for (stateType in c("Val", "Prec", "Prob")){
-        mod <- auxInvSt(mod, datOrig, stateType, chain)
-      }
-    }
-    mod
-  }
-  modISt <- inverseSt.mesm(mod, datSel)
-
-  # raster reconstruction - to be used for model output
-  newdata <- NULL
-  if (predictFull) newdata <- data.frame(resp = dat$resp, Map(st, dat[, -1, drop = FALSE], datSel[, -1, drop = FALSE]))
-  predictions <- predict(mod, newdata = newdata)$obsDat
-  distToState <- rep(NA, nrow(dat))
-  distToState[selID] <- predictions$distToState
-  precar <- rep(NA, nrow(dat))
-  precar[selID] <- predictions$distToTip
-  dToStateR <- raster(matrix(distToState, nrow = dim(resp)[1], ncol = dim(resp)[2], byrow = TRUE), template = resp)
-  precarR <- raster(matrix(precar, nrow = dim(resp)[1], ncol = dim(resp)[2], byrow = TRUE), template = resp)
-  out <- list(mod = mod, modISt = modISt, dToStateR = dToStateR, precarR = precarR)
-}
-
-### 4.6. ==== Randomly generate from the model ====
+### 4.5. ==== Randomly generate from the model ====
 #' @title Randomly generate from the Multinomial Ecosystem State Model
 #'
 #' @description Random generation for the identified Multinomial Ecosystem State Model
@@ -1555,21 +1481,21 @@ fitRasterMESM <- function(resp, preds, subsample = NULL, numStates = 4, stateVal
 #' @export
 #'
 rMESM <- function(mod, n = 1, newdata = NULL){
-  respVal <- NULL
-  if (names(mod$data) %in% colnames(newdata)) {
-    respVal <- newdata[, names(mod$data)]
-    newdata <- newdata[, -which(colnames(newdata) == names(mod$data)), drop = FALSE]
-  }
-  if (is.null(newdata)) {
-    respVal <- mod$data[[1]]
-    newdata <- as.data.frame(mod$constants[-(1:3)])
-  }
-  form <- formula(paste("~", colnames(newdata)[1]))
-  slices <- sliceMESM(form, mod, value = newdata, byChains = FALSE, doPlot = FALSE, getParsD = TRUE)
+  # input check
+  if (!is.numeric(n)) stop("'n' has to be numeric")
+  if (!(is.null(newdata) | is.data.frame(newdata))) stop("'newdata' has to be NULL or data.frame")
+  if (names(mod$data) %in% colnames(newdata)) newdata <- newdata[, -which(colnames(newdata) == names(mod$data)), drop = FALSE]
+  if (is.null(newdata)) newdata <- as.data.frame(mod$constants[-(1:3)])
+  if (!all(colnames(newdata) %in% names(mod$constants))) stop("some colnames of 'newdata' have not been found in 'mod'")
+  #_
+  form <- formula(paste(names(mod$data), "~", colnames(newdata)[1]))
+  slices <- sliceMESM(mod, form, value = newdata, byChains = FALSE, doPlot = FALSE, getParsD = TRUE)
   Nstates <- mod$constants$numStates
   sampleDist <- function(pars){
-    comp <- sample(1:Nstates, prob = pars["prob", ], size = n, replace = TRUE)
+    comp <- sample(1:Nstates, prob = pars[3, ], size = n, replace = TRUE)
     rnorm(n, pars[1, comp], pars[2, comp])
   }
   out <- t(as.data.frame(apply(slices[[1]][[1]][[1]], 1, sampleDist, simplify = FALSE)))
+  rownames(out) <- paste0("obs", 1:nrow(out))
+  out
 }
