@@ -893,7 +893,8 @@ fitMultinomialEcosystemState <- function(
 #' @param addWAIC logical value indication display of WAIC in upper right corner of the plot
 #' @param setCol vector of colours to be used for states
 #' @param drawAxes logical value indicating whether values should be marked on axes
-#' @param SDmult scalar multiplying visualized standard deviation (to make lines for small standard deviation visible)
+#' @param SDmult scalar multiplying visualized standard deviation (to make
+#' lines for small standard deviation visible)
 #' @param xlab a label for the x axis, defaults to predictor name.
 #' @param ylab a label for the y axis, defaults to response name.
 #' @param ... additional arguments passed to plot
@@ -904,15 +905,18 @@ fitMultinomialEcosystemState <- function(
 #' @author Adam Klimes
 #' @export
 #'
-plot.PaGAnmesm <- function(x, form = NULL, byChains = TRUE, transCol = TRUE, addWAIC = FALSE,
-                      setCol = c("#1b9e77", "#d95f02", "#7570b3", "#e7298a", "#66a61e"),
-                      drawAxes = TRUE, SDmult = 1, xlab = NULL, ylab = NULL, ...) {
+plot.PaGAnmesm <- function(x, form = NULL, byChains = TRUE, transCol = TRUE,
+  addWAIC = FALSE, setCol = c("#1b9e77", "#d95f02", "#7570b3", "#e7298a", "#66a61e"),
+  drawAxes = TRUE, SDmult = 1, xlab = NULL, ylab = NULL, ...) {
   # input check
-  form <- if (is.null(form)) formula(paste(names(x$data), "~", names(x$constants)[4])) else formula(form)
+  form <- if (is.null(form))
+    formula(paste(names(x$data), "~", names(x$constants)[4])) else formula(form)
   svar <- labels(terms(form))
   if (length(svar) > 1) stop("Specify only one predictor in 'form'")
-  if (!all.vars(form)[1] %in% names(x$data)) stop("Response specified in 'form' does not match 'mod'")
-  if (!svar %in% names(x$constants)) stop("Predictor specified in 'form' does not match 'mod'")
+  if (!all.vars(form)[1] %in% names(x$data))
+    stop("Response specified in 'form' does not match 'mod'")
+  if (!svar %in% names(x$constants))
+    stop("Predictor specified in 'form' does not match 'mod'")
   if (!is.logical(byChains)) stop("'byChains' has to be logical")
   if (!is.logical(transCol)) stop("'transCol' has to be logical")
   if (!is.logical(addWAIC)) stop("'addWAIC' has to be logical")
@@ -932,7 +936,7 @@ plot.PaGAnmesm <- function(x, form = NULL, byChains = TRUE, transCol = TRUE, add
   usr <- par("usr")
   axis(1, labels = c("", ""), at = c(2*usr[1]-usr[2], 2*usr[2]-usr[1]))
   axis(2, labels = c("", ""), at = c(2*usr[3]-usr[4], max(resp) + 0.05 * auxRange), lwd.ticks = 0)
-  axis(1, labels = xlab, at = mean(usr), line = 2, tick = FALSE)
+  axis(1, labels = xlab, at = mean(usr[1:2]), line = 2, tick = FALSE)
   if (drawAxes) {
     axis(1)
     yaxis <- head(axTicks(2), -1)
@@ -944,7 +948,8 @@ plot.PaGAnmesm <- function(x, form = NULL, byChains = TRUE, transCol = TRUE, add
   abline(h = max(resp) + 0.25 * auxRange, lty = 2)
   axis(2, labels = "Probability", at = max(resp) + 0.175 * auxRange, line = 2, tick = FALSE)
   axis(2, labels = ylab, at = mean(range(resp)), line = 2, tick = FALSE)
-  if (addWAIC) text(par("usr")[2] - (par("usr")[2] - par("usr")[1]) * 0.2, max(resp) + 0.175 * auxRange, paste("WAIC:", round(x$mcmcSamples$WAIC$WAIC, 1)))
+  if (addWAIC) text(par("usr")[2] - (par("usr")[2] - par("usr")[1]) * 0.2,
+    max(resp) + 0.175 * auxRange, paste("WAIC:", round(x$mcmcSamples$WAIC$WAIC, 1)))
   parsTab <- summary(x, byChains = byChains, absInt = TRUE, digit = NULL)
   auxLines <- function(parsChain, dat, mod){
     nstates <- mod$constants$numStates
@@ -957,9 +962,12 @@ plot.PaGAnmesm <- function(x, form = NULL, byChains = TRUE, transCol = TRUE, add
     }
     valInt <- parsChain[paste0("intercept_stateVal", ind), "mean"]
     precInt <- parsChain[paste0("intercept_statePrec", ind), "mean"]
-    valCov <- if (paste0(svar, "_stateVal", ind[1]) %in% cNames) parsChain[paste0(svar, "_stateVal", ind), "mean"] else rep(0, nstates)
-    precCov <- if (paste0(svar, "_statePrec", ind[1]) %in% cNames) parsChain[paste0(svar, "_statePrec", ind), "mean"] else rep(0, nstates)
-    probCov <- if (paste0(svar, "_stateProb", ind[1]) %in% cNames) parsChain[paste0(svar, "_stateProb", ind), "mean"] else rep(0, nstates)
+    valCov <- if (paste0(svar, "_stateVal", ind[1]) %in% cNames)
+      parsChain[paste0(svar, "_stateVal", ind), "mean"] else rep(0, nstates)
+    precCov <- if (paste0(svar, "_statePrec", ind[1]) %in% cNames)
+      parsChain[paste0(svar, "_statePrec", ind), "mean"] else rep(0, nstates)
+    probCov <- if (paste0(svar, "_stateProb", ind[1]) %in% cNames)
+      parsChain[paste0(svar, "_stateProb", ind), "mean"] else rep(0, nstates)
     if (nstates > 1) {
       probVals <- as.matrix(data.frame(Map(function(int, cov) exp(int + cov * xx), probInt, probCov)))
       probVals[is.na(probVals)] <- 1
@@ -969,17 +977,22 @@ plot.PaGAnmesm <- function(x, form = NULL, byChains = TRUE, transCol = TRUE, add
     for (i in 1:nstates){
       cols <- setCol[i]
       if (nstates > 1) {
-        lines(xx, max(resp) + 0.1 * auxRange + probVals[, i] * 0.15 * auxRange, col = setCol[i], lwd = 3)
+        lines(xx, max(resp) + 0.1 * auxRange + probVals[, i] * 0.15 * auxRange,
+          col = setCol[i], lwd = 3)
         if (transCol) {
           rgbVec <- col2rgb(cols)[, 1]
-          cols <- rgb(rgbVec[1], rgbVec[2], rgbVec[3], alpha = 40 + probVals[, i] * 215, maxColorValue = 255)
+          cols <- rgb(rgbVec[1], rgbVec[2], rgbVec[3],
+            alpha = 40 + probVals[, i] * 215, maxColorValue = 255)
         }
       }
       sdVals <- 1 / sqrt(exp(precInt[i] + precCov[i] * xx))
       yEst <- do.call(invlink, list(valInt[i] + valCov[i] * xx))
-      segments(head(xx, -1), head(yEst, -1), x1 = tail(xx, -1), y1 = tail(yEst, -1), col = cols, lwd = 3)
-      lines(xx, do.call(invlink, list(valInt[i] + valCov[i] * xx + sdVals * SDmult)), col = setCol[i], lty = 2, lwd = 1)
-      lines(xx, do.call(invlink, list(valInt[i] + valCov[i] * xx - sdVals * SDmult)), col = setCol[i], lty = 2, lwd = 1)
+      segments(head(xx, -1), head(yEst, -1), x1 = tail(xx, -1),
+        y1 = tail(yEst, -1), col = cols, lwd = 3)
+      lines(xx, do.call(invlink, list(valInt[i] + valCov[i] * xx + sdVals * SDmult)),
+        col = setCol[i], lty = 2, lwd = 1)
+      lines(xx, do.call(invlink, list(valInt[i] + valCov[i] * xx - sdVals * SDmult)),
+        col = setCol[i], lty = 2, lwd = 1)
     }
   }
   invisible(lapply(parsTab, auxLines, dat, x))
@@ -992,22 +1005,28 @@ plot.PaGAnmesm <- function(x, form = NULL, byChains = TRUE, transCol = TRUE, add
 #' Multinomial Ecosystem State Model across all chains or for each chain separately
 #'
 #' @param object an object of class "PaGAnmesm"
-#' @param byChains logical value indicating if the summary should be calculated for each chain separately
-#' @param digit integer specifying the number of decimal places to be used. Use \code{"NULL"} for no rounding.
-#' @param absInt logical value indicating if intercepts for state values should be absolute (by default, they represent differences)
-#' @param randomSample integer specifying how many random samples from posterior distribution to take instead of summary. Use \code{"NULL"} for summary.
+#' @param byChains logical value indicating if the summary should be calculated
+#' for each chain separately
+#' @param digit integer specifying the number of decimal places to be used.
+#' Use \code{"NULL"} for no rounding.
+#' @param absInt logical value indicating if intercepts for state values should
+#' be absolute (by default, they represent differences)
+#' @param randomSample integer specifying how many random samples from posterior
+#' distribution to take instead of summary. Use \code{"NULL"} for summary.
 #'
 #' @return Returns data.frame of quantiles of posterior of parameters
 #'
 #' @author Adam Klimes
 #' @export
 #'
-summary.PaGAnmesm <- function(object, byChains = FALSE, digit = 4L, absInt = FALSE, randomSample = NULL){
+summary.PaGAnmesm <- function(object, byChains = FALSE, digit = 4L,
+  absInt = FALSE, randomSample = NULL){
   # input check
   if (!is.logical(byChains)) stop("'byChains' has to be logical")
   if (!(is.numeric(digit) | is.null(digit))) stop("'digit' has to be NULL or numeric")
   if (!is.logical(absInt)) stop("'absInt' has to be logical")
-  if (!(is.numeric(randomSample) | is.null(randomSample))) stop("'randomSample' has to be NULL or numeric")
+  if (!(is.numeric(randomSample) | is.null(randomSample)))
+    stop("'randomSample' has to be NULL or numeric")
   #_
   varsSamples <- lapply(object$mcmcSamples$samples,
     function(x) x[, !grepl(paste0("^lifted|^linState|^", names(object$data)), colnames(x))])
@@ -1023,7 +1042,8 @@ summary.PaGAnmesm <- function(object, byChains = FALSE, digit = 4L, absInt = FAL
       c(mean = mean(x), sd = sd(x), quantile(x, c(0.025,0.25,0.75,0.975), na.rm = TRUE))
     out <- lapply(varsSamples, function(x) t(apply(x, 2, auxSummary)))
   } else {
-    out <- lapply(varsSamples, function(x) t(x[sample(1:nrow(varsSamples[[1]]), randomSample), , drop = FALSE]))
+    out <- lapply(varsSamples,
+      function(x) t(x[sample(1:nrow(varsSamples[[1]]), randomSample), , drop = FALSE]))
   }
   # if (length(out) == 1) out <- out[[1]]
   if (!is.null(digit)) out <- lapply(out, round, digit)
@@ -1033,7 +1053,8 @@ summary.PaGAnmesm <- function(object, byChains = FALSE, digit = 4L, absInt = FAL
 ### 3.3. ==== Predict ecosystem characteristics based on Multinomial Ecosystem State Model ====
 #' @title Predict from Multinomial Ecosystem State Model
 #'
-#' @description This function calculates probability curves for ecosystems based on Multinomial Ecosystem State Model
+#' @description This function calculates probability curves for ecosystems based
+#' on Multinomial Ecosystem State Model
 #'
 #' @param mod an object of class "PaGAnmesm"
 #' @param newdata dataframe of predictor values of ecosystems to be predicted.
@@ -1057,7 +1078,8 @@ summary.PaGAnmesm <- function(object, byChains = FALSE, digit = 4L, absInt = FAL
 #'
 predict.PaGAnmesm <- function(mod, newdata = NULL, samples = 1000, threshold = 0.2){
   # input check
-  if (!(is.null(newdata) | is.data.frame(newdata))) stop("'newdata' has to be NULL or data.frame")
+  if (!(is.null(newdata) | is.data.frame(newdata)))
+    stop("'newdata' has to be NULL or data.frame")
   #_
   respVal <- NULL
   if (names(mod$data) %in% colnames(newdata)) {
@@ -1114,16 +1136,24 @@ predict.PaGAnmesm <- function(mod, newdata = NULL, samples = 1000, threshold = 0
 coef.PaGAnmesm <- function(object){
   s <- summary(object, digit = 3)[[1]]
   getPars <- function(state, s){
-    auxGetPars <- function(type, state, s) s[grep(paste0("_state", type, "\\[", state, "\\]$"), rownames(s)), "mean", drop = FALSE]
-    types <- c("Val", "Prec", "Prob")
-    out <- do.call(cbind, lapply(types, auxGetPars, state, s))
-    colnames(out) <- types
-    intID <- grep("^intercept", rownames(out))
-    out <- out[c(intID, (1:nrow(out))[-intID]), ]
-    rownames(out) <- vapply(strsplit(rownames(out), "_"), "[", 1, FUN.VALUE = "string")
-    out
+    auxGetPars <- function(type, state, s){
+      stateIndex <- if (Nstates == 1) "$" else paste0("\\[", state, "\\]$")
+      aux <- s[grep(paste0("_state", type, stateIndex), rownames(s)), "mean", drop = FALSE]
+      rownames(aux) <- sub(paste0("_state", type, stateIndex), "", rownames(aux))
+      intID <- which(rownames(aux) == "intercept")
+      out <- aux[c(intID, (1:nrow(aux))[-intID]), , drop = FALSE]
+      data.frame(ID = rownames(out), out)
+    }
+    types <- if (Nstates == 1) c("Val", "Prec") else c("Val", "Prec", "Prob")
+    parsPerType <- lapply(types, auxGetPars, state, s)
+    mergeAll <- function(x, y) merge(x, y, by = "ID", all = TRUE)
+    out <- Reduce(mergeAll, parsPerType)
+    rownames(out) <- out$ID
+    colnames(out) <- c("ID", types)
+    out[, -1]
   }
-  res <- lapply(1:object$constants$numStates, getPars, s)
+  Nstates <- object$constants$numStates
+  res <- lapply(1:Nstates, getPars, s)
   names(res) <- paste0("State", 1:object$constants$numStates)
   res
 }
@@ -1131,7 +1161,8 @@ coef.PaGAnmesm <- function(object){
 ### 3.5. ==== Print Multinomial Ecosystem State Model ====
 #' @title Print Multinomial Ecosystem State Model
 #'
-#' @description This function prints summary information about Multinomial Ecosystem State Model
+#' @description This function prints summary information about Multinomial
+#' Ecosystem State Model
 #'
 #' @param x an object of class "PaGAnmesm"
 #'
@@ -1252,8 +1283,10 @@ getMinMax <- function(slices, threshold = 0.0){
       groups <- lapply(0:sum(dif), function(x) which(x == c(0,cumsum(dif))))
       sdf <- sign(diff(-combSort$probDens))
       catDf <- -diff(c(-1, sdf[dif == 1], 1))/2
-      mins <- vapply(groups[catDf == -1], function(x) x[which(-combSort$probDens[x] == min(-combSort$probDens[x]))], FUN.VALUE = 1)
-      maxs <- vapply(groups[catDf == 1], function(x) x[which(-combSort$probDens[x] == max(-combSort$probDens[x]))], FUN.VALUE = 1)
+      mins <- vapply(groups[catDf == -1],
+        function(x) x[which(-combSort$probDens[x] == min(-combSort$probDens[x]))], FUN.VALUE = 1)
+      maxs <- vapply(groups[catDf == 1],
+        function(x) x[which(-combSort$probDens[x] == max(-combSort$probDens[x]))], FUN.VALUE = 1)
       auxChange <- function(x, signC) {
         comp <- diff(-combSort$probDens[c(min(x)-1, max(x))])
         if (length(comp) == 0) comp <- -1
@@ -1297,30 +1330,40 @@ getMinMax <- function(slices, threshold = 0.0){
 #' @param setCol vector of colours to be used for visualization of estimated states
 #' @param plotEst logical value indicating if estimated states should be visualized
 #' @param xaxis logical value indicating if values should be marked on x-axis
-#' @param addEcos logical value indicating if ecosystems within \code{"ecosTol"} from \code{"value"} should be visualized on the line
-#' @param ecosTol scalar specifying range of predictor from the \code{"value"} to select ecosystems to be visualized
+#' @param addEcos logical value indicating if ecosystems within \code{"ecosTol"}
+#' from \code{"value"} should be visualized on the line
+#' @param ecosTol scalar specifying range of predictor from the \code{"value"}
+#' to select ecosystems to be visualized
 #' @param samples scalar specifying number of samples to be taken along predictor
-#' @param randomSample integer specifying how many random samples from posterior distribution to take instead of summary. Use \code{"NULL"} for summary.
-#' @param getParsD logical value indicating if the output should be parameters of distributions instead of the slice
+#' @param randomSample integer specifying how many random samples from posterior
+#' distribution to take instead of summary. Use \code{"NULL"} for summary.
+#' @param getParsD logical value indicating if the output should be parameters
+#' of distributions instead of the slice
 #'
 #' @return Returns list of plotted values or parameter of distributions (if getParsD == TRUE)
 #'
 #' @author Adam Klimes
 #' @export
 #'
-sliceMESM <- function(mod, form = NULL, value = 0, byChains = TRUE, xlab = names(mod$data), doPlot = TRUE,
-                      setCol = c("#1b9e77", "#d95f02", "#7570b3", "#e7298a", "#66a61e"),
-                      plotEst = TRUE, xaxis = TRUE, addEcos = FALSE, ecosTol = 0.1,
-                      samples = 1000, randomSample = NULL, getParsD = FALSE){
+sliceMESM <- function(mod, form = NULL, value = 0, byChains = TRUE,
+  xlab = names(mod$data), doPlot = TRUE,
+  setCol = c("#1b9e77", "#d95f02", "#7570b3", "#e7298a", "#66a61e"),
+  plotEst = TRUE, xaxis = TRUE, addEcos = FALSE, ecosTol = 0.1, samples = 1000,
+  randomSample = NULL, getParsD = FALSE){
   # input check
   if (!inherits(mod, "PaGAnmesm")) stop("'mod' must be an object of class 'PaGAnmesm'")
-  form <- if (is.null(form)) formula(paste(names(mod$data), "~", names(mod$constants)[4])) else formula(form)
+  form <- if (is.null(form))
+    formula(paste(names(mod$data), "~", names(mod$constants)[4])) else formula(form)
   svar <- labels(terms(form))
   if (length(svar) > 1) stop("Specify only one predictor in 'form'")
-  if (!all.vars(form)[1] %in% names(mod$data)) stop("Response specified in 'form' does not match 'mod'")
-  if (!svar %in% names(mod$constants)) stop("Predictor specified in 'form' does not match 'mod'")
-  if (!(is.numeric(value) | is.data.frame(value))) stop("'value' has to be a numeric or data.frame")
-  if (is.data.frame(value)) if (any(!colnames(value) %in% names(mod$constants))) stop("colnames of 'value' do not match 'mod'")
+  if (!all.vars(form)[1] %in% names(mod$data))
+    stop("Response specified in 'form' does not match 'mod'")
+  if (!svar %in% names(mod$constants))
+    stop("Predictor specified in 'form' does not match 'mod'")
+  if (!(is.numeric(value) | is.data.frame(value)))
+    stop("'value' has to be a numeric or data.frame")
+  if (is.data.frame(value)) if (any(!colnames(value) %in% names(mod$constants)))
+    stop("colnames of 'value' do not match 'mod'")
   if (!is.logical(doPlot)) stop("'doPlot' has to be logical")
   if (!is.logical(plotEst)) stop("'plotEst' has to be logical")
   if (!is.logical(xaxis)) stop("'xaxis' has to be logical")
@@ -1346,7 +1389,8 @@ sliceMESM <- function(mod, form = NULL, value = 0, byChains = TRUE, xlab = names
     getPars <- function(curState, pars, value){
       pars <- as.matrix(pars)
       auxExtract <- function(toGet, curState, pars, value){
-        pos <- match(paste0(c("intercept",colnames(value)), "_", toGet, "[", curState, "]"), rownames(pars))
+        stateIndex <- if (Nstates == 1) NULL else paste0("[", curState, "]")
+        pos <- match(paste0(c("intercept",colnames(value)), "_", toGet, stateIndex), rownames(pars))
         pars[pos[1], 1] + as.vector(value %*% pars[pos[-1], 1])
       }
       est <- auxExtract("stateVal", curState, pars, value)
@@ -1366,8 +1410,8 @@ sliceMESM <- function(mod, form = NULL, value = 0, byChains = TRUE, xlab = names
                    gamma = "dgamma",
                    beta = "dbeta")
     i <- 1:Nstates
-    strFun <- paste0("(", paste(paste0("probs[", i, "] * ", dfun, "(x, ", "parOne[", i, "], ", "parTwo[", i, "])"), collapse = " + "), ")/", Nstates)
-    # strFun <- paste0("rowSums(probs * simplify2array(.mapply(function(meanVal, sdVal) dnorm(x, meanVal, sdVal), list(parOne, parTwo), NULL)))/", Nstates)
+    strFun <- paste0("(", paste(paste0("probs[", i, "] * ", dfun,
+      "(x, ", "parOne[", i, "], ", "parTwo[", i, "])"), collapse = " + "), ")/", Nstates)
     argsList <- alist(x =, parOne =, parTwo =, probs =)
     as.function(c(argsList, str2lang(strFun)))
   }
@@ -1391,7 +1435,8 @@ sliceMESM <- function(mod, form = NULL, value = 0, byChains = TRUE, xlab = names
   if (doPlot) {
     if (nrow(value) > 1) warning("Only the curve for the first value is plotted.")
     yrange <- c(0, 1.05 * max(unlist(densOut)))
-    plot(range(resp), yrange, type = "n", ylab = "Probability density", xlab = xlab, ylim = yrange, axes = FALSE, yaxs = "i")
+    plot(range(resp), yrange, type = "n", ylab = "Probability density",
+      xlab = xlab, ylim = yrange, axes = FALSE, yaxs = "i")
     if (xaxis) axis(1)
     axis(2, las = 2)
     box(bty = "l")
@@ -1399,7 +1444,8 @@ sliceMESM <- function(mod, form = NULL, value = 0, byChains = TRUE, xlab = names
     if (plotEst) {
       plotEstFn <- function(parsVal){
         rgbVec <- col2rgb(setCol)
-        cols <- rgb(rgbVec[1, ], rgbVec[2, ], rgbVec[3, ], alpha = 40 + parsVal[1, "prob", ] * 215, maxColorValue = 255)
+        cols <- rgb(rgbVec[1, ], rgbVec[2, ], rgbVec[3, ],
+          alpha = 40 + parsVal[1, "prob", ] * 215, maxColorValue = 255)
         abline(v = parsVal[1, "est", ], lty = 2, lwd = 3, col = cols)
       }
       lapply(parsValList, lapply, plotEstFn)
@@ -1418,9 +1464,12 @@ sliceMESM <- function(mod, form = NULL, value = 0, byChains = TRUE, xlab = names
 #' @param threshold numerical value denoting minimum relative
 #'   importance of visualized stable states and tipping points
 #' @param addPoints logical value indicating if ecosystems should be visualized
-#' @param addMinMax logical value indicating if stable states and tipping points should be visualized
-#' @param randomSample integer specifying how many random samples from posterior distribution to take instead of mean. Use \code{"NULL"} for mean.
-#' @param otherPreds named vector of values of predictors not specified by form. Default are zeros
+#' @param addMinMax logical value indicating if stable states and tipping points
+#' should be visualized
+#' @param randomSample integer specifying how many random samples from posterior
+#' distribution to take instead of mean. Use \code{"NULL"} for mean.
+#' @param otherPreds named vector of values of predictors not specified by form.
+#' Default are zeros
 #' @param ... parameters passed to image()
 #'
 #' @return Returns probability density matrix.
@@ -1428,12 +1477,16 @@ sliceMESM <- function(mod, form = NULL, value = 0, byChains = TRUE, xlab = names
 #' @author Adam Klimes
 #' @export
 #'
-landscapeMESM <- function(mod, form = NULL, threshold = 0, addPoints = TRUE, addMinMax = TRUE, randomSample = NULL, otherPreds = NULL, ...){
+landscapeMESM <- function(mod, form = NULL, threshold = 0, addPoints = TRUE,
+  addMinMax = TRUE, randomSample = NULL, otherPreds = NULL, ...){
   # input check
   if (!inherits(mod, "PaGAnmesm")) stop("'mod' must be an object of class 'PaGAnmesm'")
-  form <- if (is.null(form)) formula(paste(names(mod$data), "~", names(mod$constants)[4])) else formula(form)
+  form <- if (is.null(form))
+    formula(paste(names(mod$data), "~", names(mod$constants)[4])) else formula(form)
   svar <- labels(terms(form))
   if (length(svar) > 1) stop("Specify only one predictor in 'form'")
+  if (!svar %in% names(mod$constants))
+    stop("Predictor specified in 'form' does not match 'mod'")
   if (!is.logical(addPoints)) stop("'addPoints' has to be logical")
   if (!is.logical(addMinMax)) stop("'addMinMax' has to be logical")
   # _
@@ -1445,11 +1498,14 @@ landscapeMESM <- function(mod, form = NULL, threshold = 0, addPoints = TRUE, add
                                        dimnames = list(NULL, names(otherPreds))))
     colnames(valueDF)[1] <- svar
   }  else valueDF <- grad
-  slices <- sliceMESM(mod, form, value = valueDF, byChains = FALSE, doPlot = FALSE, randomSample = randomSample)
+  slices <- sliceMESM(mod, form, value = valueDF, byChains = FALSE,
+    doPlot = FALSE, randomSample = randomSample)
   tipStableAll <- getMinMax(slices, threshold)
   tipStable <- tipStableAll$tipStable
   mats <- tipStableAll$matsSt
-  matPlot <- if (!is.null(randomSample)) apply(array(do.call(c, mats), dim = c(dim(mats[[1]]), length(mats))), 2, apply, 1, sd) else mats[[1]]
+  matPlot <- if (!is.null(randomSample))
+    apply(array(do.call(c, mats), dim = c(dim(mats[[1]]), length(mats))),
+    2, apply, 1, sd) else mats[[1]]
   image(grad, slices$resp, t(matPlot), ...)
   box()
   plotMinMax <- function(tipStable, xCoors, state, col, cex = 0.5){
@@ -1483,13 +1539,17 @@ landscapeMESM <- function(mod, form = NULL, threshold = 0, addPoints = TRUE, add
 rMESM <- function(mod, n = 1, newdata = NULL){
   # input check
   if (!is.numeric(n)) stop("'n' has to be numeric")
-  if (!(is.null(newdata) | is.data.frame(newdata))) stop("'newdata' has to be NULL or data.frame")
-  if (names(mod$data) %in% colnames(newdata)) newdata <- newdata[, -which(colnames(newdata) == names(mod$data)), drop = FALSE]
+  if (!(is.null(newdata) | is.data.frame(newdata)))
+    stop("'newdata' has to be NULL or data.frame")
+  if (names(mod$data) %in% colnames(newdata))
+    newdata <- newdata[, -which(colnames(newdata) == names(mod$data)), drop = FALSE]
   if (is.null(newdata)) newdata <- as.data.frame(mod$constants[-(1:3)])
-  if (!all(colnames(newdata) %in% names(mod$constants))) stop("some colnames of 'newdata' have not been found in 'mod'")
+  if (!all(colnames(newdata) %in% names(mod$constants)))
+    stop("some colnames of 'newdata' have not been found in 'mod'")
   #_
   form <- formula(paste(names(mod$data), "~", colnames(newdata)[1]))
-  slices <- sliceMESM(mod, form, value = newdata, byChains = FALSE, doPlot = FALSE, getParsD = TRUE)
+  slices <- sliceMESM(mod, form, value = newdata, byChains = FALSE,
+    doPlot = FALSE, getParsD = TRUE)
   Nstates <- mod$constants$numStates
   sampleDist <- function(pars){
     comp <- sample(1:Nstates, prob = pars[3, ], size = n, replace = TRUE)
