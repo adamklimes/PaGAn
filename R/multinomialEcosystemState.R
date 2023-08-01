@@ -461,25 +461,25 @@ modelSpecificationMultinomialEcosystemState <- function(
       # Initialise a vecotr of output values
       outValuesNames <- c("intercept", stateValCovs_nonIntercept)
       outValues <- setNames(c(
-        rnorm(length(stateValCovs_nonIntercept), 0.0, 4.0),
-        ifelse(curState > 1, abs(rnorm(1, 0.0, 4.0)), rnorm(1, 0.0, 4.0))
+        rnorm(length(stateValCovs_nonIntercept), 0.0, 1.0),
+        ifelse(curState > 1, abs(rnorm(1, 0.0, 1.0)), rnorm(1, 0.0, 1.0))
       ), paste(outValuesNames, "_stateVal[", curState, "]", sep = ""))
       if(curState > 1) {
         # Add the the probability sub-model parameters if the current state is greater than 1
         outValues <- c(outValues, setNames(
-          rnorm(length(stateProbCovs), 0.0, 4.0),
+          rnorm(length(stateProbCovs), 0.0, 1.0),
           paste(stateProbCovs, "_stateProb[", curState, "]", sep = "")
         ))
       }
       # Add the precision sub-model parameters
       if(is.na(formulaStrings[curState, 3])) {
         outValues <- c(outValues, setNames(
-          rnorm(2, 0.0, 4.0),
+          rnorm(2, 0.0, 1.0),
           paste(c("intercept_statePrec", "linStateProb_statePrec"), "[", curState, "]", sep = "")
         ))
       } else {
         outValues <- c(outValues, setNames(
-          rnorm(length(statePrecCovs), 0.0, 4.0),
+          rnorm(length(statePrecCovs), 0.0, 1.0),
           paste(statePrecCovs, "_statePrec[", curState, "]", sep = "")
         ))
       }
@@ -533,11 +533,11 @@ modelSpecificationMultinomialEcosystemState <- function(
       "betabinomial" = paste("\t\t", respVariablesBUGS, "[dataIter] ~ dbetabin(mean = linStateVal[dataIter], prec = linStatePrec[dataIter], size = numTrials[dataIter])")
     ), sep = "\n")
     # Create a vector of potential initial values for the model parameters
-    initialValues <- setNames(rnorm(length(stateValCovs), 0.0, 4.0), paste(stateValCovs, "_stateVal", sep = ""))
+    initialValues <- setNames(rnorm(length(stateValCovs), 0.0, 1.0), paste(stateValCovs, "_stateVal", sep = ""))
     if(is.na(formulaStrings[1, 3])) {
-      initialValues <- c(initialValues, setNames(rnorm(1, 0.0, 4.0), "intercept_statePrec"))
+      initialValues <- c(initialValues, setNames(rnorm(1, 0.0, 1.0), "intercept_statePrec"))
     } else {
-      initialValues <- c(initialValues, setNames(rnorm(length(statePrecCovs), 0.0, 4.0), paste(statePrecCovs, "_statePrec", sep = "")))
+      initialValues <- c(initialValues, setNames(rnorm(length(statePrecCovs), 0.0, 1.0), paste(statePrecCovs, "_statePrec", sep = "")))
     }
   }
   # Create NIMBLE model code
@@ -930,12 +930,13 @@ plot.PaGAnmesm <- function(x, form = NULL, byChains = TRUE, transCol = TRUE,
   if (is.null(ylab)) ylab <- names(x$data)
   auxRange <- max(resp) - min(resp)
   invlink <- switch(as.character(x$linkFunction), identity = function(x) x, log = exp,
-                    logit = function(x) exp(x)/(1+exp(x)))
+    logit = function(x) exp(x)/(1+exp(x)), probit = pnorm, cloglog = function(x) 1 - exp(-exp(x)))
   plot(form, data = dat, ylim = c(min(resp) - 0.05 * auxRange, max(resp) + 0.3 * auxRange),
        yaxs = "i", axes = FALSE, ann = FALSE, ...)
   usr <- par("usr")
+  maxY <- max(resp) + 0.05 * auxRange
   axis(1, labels = c("", ""), at = c(2*usr[1]-usr[2], 2*usr[2]-usr[1]))
-  axis(2, labels = c("", ""), at = c(2*usr[3]-usr[4], max(resp) + 0.05 * auxRange), lwd.ticks = 0)
+  axis(2, labels = c("", ""), at = c(2*usr[3]-usr[4], maxY), lwd.ticks = 0)
   axis(1, labels = xlab, at = mean(usr[1:2]), line = 2, tick = FALSE)
   if (drawAxes) {
     axis(1)
@@ -943,7 +944,7 @@ plot.PaGAnmesm <- function(x, form = NULL, byChains = TRUE, transCol = TRUE,
     axis(2, labels = yaxis, at = yaxis, las = 2)
   }
   axis(2, labels = 0:1, at = max(resp) + c(0.1, 0.25) * auxRange, las = 2)
-  abline(h = max(resp) + 0.05 * auxRange, lwd = 3)
+  abline(h = maxY, lwd = 3)
   abline(h = max(resp) + 0.1 * auxRange, lty = 2)
   abline(h = max(resp) + 0.25 * auxRange, lty = 2)
   axis(2, labels = "Probability", at = max(resp) + 0.175 * auxRange, line = 2, tick = FALSE)
@@ -987,12 +988,15 @@ plot.PaGAnmesm <- function(x, form = NULL, byChains = TRUE, transCol = TRUE,
       }
       sdVals <- 1 / sqrt(exp(precInt[i] + precCov[i] * xx))
       yEst <- do.call(invlink, list(valInt[i] + valCov[i] * xx))
-      segments(head(xx, -1), head(yEst, -1), x1 = tail(xx, -1),
-        y1 = tail(yEst, -1), col = cols, lwd = 3)
-      lines(xx, do.call(invlink, list(valInt[i] + valCov[i] * xx + sdVals * SDmult)),
-        col = setCol[i], lty = 2, lwd = 1)
-      lines(xx, do.call(invlink, list(valInt[i] + valCov[i] * xx - sdVals * SDmult)),
-        col = setCol[i], lty = 2, lwd = 1)
+      uci <- do.call(invlink, list(valInt[i] + valCov[i] * xx + sdVals * SDmult))
+      lci <- do.call(invlink, list(valInt[i] + valCov[i] * xx - sdVals * SDmult))
+      yEstSel <- yEst < maxY
+      uciSel <- uci < maxY
+      lciSel <- lci < maxY
+      segments(head(xx[yEstSel], -1), head(yEst[yEstSel], -1), x1 = tail(xx[yEstSel], -1),
+        y1 = tail(yEst[yEstSel], -1), col = if (length(cols) > 1) cols[yEstSel] else cols, lwd = 3)
+      lines(xx[uciSel], uci[uciSel], col = setCol[i], lty = 2, lwd = 1)
+      lines(xx[lciSel], lci[lciSel], col = setCol[i], lty = 2, lwd = 1)
     }
   }
   invisible(lapply(parsTab, auxLines, dat, x))
@@ -1028,7 +1032,9 @@ summary.PaGAnmesm <- function(object, byChains = FALSE, digit = 4L,
   if (!(is.numeric(randomSample) | is.null(randomSample)))
     stop("'randomSample' has to be NULL or numeric")
   #_
-  varsSamples <- lapply(object$mcmcSamples$samples,
+  mcmcList <- if (is.list(object$mcmcSamples$samples))
+    object$mcmcSamples$samples else list(object$mcmcSamples$samples)
+  varsSamples <- lapply(mcmcList,
     function(x) x[, !grepl(paste0("^lifted|^linState|^", names(object$data)), colnames(x))])
   if (!byChains) varsSamples <- list(do.call(rbind, varsSamples))
   sepInt <- function(samp){
@@ -1127,22 +1133,22 @@ predict.PaGAnmesm <- function(mod, newdata = NULL, samples = 1000, threshold = 0
 #' @description Posterior mean values from Multinomial Ecosystem State Model
 #'
 #' @param object an object of class "PaGAnmesm"
+#' @param digit integer specifying the number of decimal places to be used.
+#' Use \code{"NULL"} for no rounding.
 #'
 #' @return List of matrices of posterior mean values for each parameter
 #'
 #' @author Adam Klimes
 #' @export
 #'
-coef.PaGAnmesm <- function(object){
-  s <- summary(object, digit = 3)[[1]]
+coef.PaGAnmesm <- function(object, digit = NULL){
+  s <- summary(object, digit = digit)[[1]]
   getPars <- function(state, s){
     auxGetPars <- function(type, state, s){
       stateIndex <- if (Nstates == 1) "$" else paste0("\\[", state, "\\]$")
       aux <- s[grep(paste0("_state", type, stateIndex), rownames(s)), "mean", drop = FALSE]
       rownames(aux) <- sub(paste0("_state", type, stateIndex), "", rownames(aux))
-      intID <- which(rownames(aux) == "intercept")
-      out <- aux[c(intID, (1:nrow(aux))[-intID]), , drop = FALSE]
-      data.frame(ID = rownames(out), out)
+      data.frame(ID = rownames(aux), aux)
     }
     types <- if (Nstates == 1) c("Val", "Prec") else c("Val", "Prec", "Prob")
     parsPerType <- lapply(types, auxGetPars, state, s)
@@ -1150,7 +1156,8 @@ coef.PaGAnmesm <- function(object){
     out <- Reduce(mergeAll, parsPerType)
     rownames(out) <- out$ID
     colnames(out) <- c("ID", types)
-    out[, -1]
+    intID <- which(rownames(out) == "intercept")
+    out[c(intID, (1:nrow(out))[-intID]), -1, drop = FALSE]
   }
   Nstates <- object$constants$numStates
   res <- lapply(1:Nstates, getPars, s)
@@ -1177,7 +1184,7 @@ print.PaGAnmesm <- function(x){
   cat("WAIC:", WAIC$WAIC, "\n")
   cat("pWAIC:", WAIC$pWAIC, "\n")
   cat("Posterior mean values:\n")
-  print(coef(x))
+  print(coef(x, 3))
   if (WAIC$pWAIC > 0.4) cat("[Warning] There are individual pWAIC values that are greater than 0.4. This may indicate that the WAIC estimate is unstable (Vehtari et al., 2017), at least in cases without grouping of data nodes or multivariate data nodes.\n")
   # x$compiledModel$mcmcObject$getWAICdetails()
   invisible(x)
@@ -1377,7 +1384,7 @@ sliceMESM <- function(mod, form = NULL, value = 0, byChains = TRUE,
   if (is.null(randomSample)) parsTab <- lapply(parsTab, function(x) x[, "mean", drop = FALSE])
   Nstates <- mod$constants$numStates
   invlink <- switch(as.character(mod$linkFunction), identity = function(x) x, log = exp,
-                    logit = function(x) exp(x)/(1+exp(x)))
+    logit = function(x) exp(x)/(1+exp(x)), probit = pnorm, cloglog = function(x) 1 - exp(-exp(x)))
   xx <- seq(min(resp), max(resp), length.out = samples)
   if (addEcos) {
     pred <- mod$constants[[svar]]
@@ -1390,8 +1397,9 @@ sliceMESM <- function(mod, form = NULL, value = 0, byChains = TRUE,
       pars <- as.matrix(pars)
       auxExtract <- function(toGet, curState, pars, value){
         stateIndex <- if (Nstates == 1) NULL else paste0("[", curState, "]")
-        pos <- match(paste0(c("intercept",colnames(value)), "_", toGet, stateIndex), rownames(pars))
-        pars[pos[1], 1] + as.vector(value %*% pars[pos[-1], 1])
+        pos <- match(paste0(c("intercept", colnames(value)), "_", toGet, stateIndex), rownames(pars))
+        sel <- !is.na(pos[-1])
+        pars[pos[1], 1] + as.vector(value[, sel, drop = FALSE] %*% pars[pos[-1][sel], 1])
       }
       est <- auxExtract("stateVal", curState, pars, value)
       prec <- auxExtract("statePrec", curState, pars, value)
