@@ -897,10 +897,7 @@ fitMultinomialEcosystemState <- function(
 #' lines for small standard deviation visible)
 #' @param xlab a label for the x axis, defaults to predictor name.
 #' @param ylab a label for the y axis, defaults to response name.
-#' @param ... additional arguments passed to plot
-#'
-#' @return Returns invisibly a list containing posterior means of state value
-#' coefficients for each chain used in plotting.
+#' @param ... additional arguments passed to \link[graphics]{plot}
 #'
 #' @author Adam Klimes
 #' @export
@@ -999,7 +996,8 @@ plot.PaGAnmesm <- function(x, form = NULL, byChains = TRUE, transCol = TRUE,
       lines(xx[lciSel], lci[lciSel], col = setCol[i], lty = 2, lwd = 1)
     }
   }
-  invisible(lapply(parsTab, auxLines, dat, x))
+  lapply(parsTab, auxLines, dat, x)
+  invisible()
 }
 
 ### 3.2. ==== Summary of Multinomial Ecosystem State Model ====
@@ -1018,7 +1016,9 @@ plot.PaGAnmesm <- function(x, form = NULL, byChains = TRUE, transCol = TRUE,
 #' @param randomSample integer specifying how many random samples from posterior
 #' distribution to take instead of summary. Use \code{"NULL"} for summary.
 #'
-#' @return Returns data.frame of quantiles of posterior of parameters
+#' @return Returns a list with one item being data.frame of quantiles of
+#' posterior distributions of parameters. If \code{byChains} is \code{TRUE},
+#' a data.frame is returned for each chain.
 #'
 #' @author Adam Klimes
 #' @export
@@ -1064,18 +1064,20 @@ summary.PaGAnmesm <- function(object, byChains = FALSE, digit = 4L,
 #'
 #' @param mod an object of class "PaGAnmesm"
 #' @param newdata dataframe of predictor values of ecosystems to be predicted.
-#'   If it contains column with response variable, obsDat is returned.
+#'   If it contains column with response variable, \code{obsDat} is returned.
 #'   If not provided, prediction is done for modelled data.
 #' @param samples number of samples to take along the response variable
-#' @param threshold number from 0 to 1 denoting how pronounced stable states should be marked as considerable
+#' @param threshold number from 0 to 1 denoting how pronounced stable states
+#' should be marked as considerable
 #'
 #' @return A list containing the following components:
 #' \itemize{
 #' \item{\code{sampledResp}}{A numeric vector of samples along response variable}
 #' \item{\code{probCurves}}{A data frame of probability curves for each observation}
-#' \item{\code{tipPoints}}{A list of tipping points for each observation. Border values are never included}
-#' \item{\code{stableStates}}{A list of stable states for each observation}
-#' \item{\code{obsDat}}{A data frame containing values of response variable,
+#' \item{\code{tipStable}}{A list of data.frames for each observation with all
+#' stable states and tipping points, their scaled probability density and response
+#' variable value, if they are stable states, and if their satisfy the threshold}
+#' \item{\code{obsDat}}{A data frame containing values of response variable, potential energy,
 #' distance to closest tipping point and stable state for each observation}
 #' }
 #'
@@ -1136,7 +1138,7 @@ predict.PaGAnmesm <- function(mod, newdata = NULL, samples = 1000, threshold = 0
 #' @param digit integer specifying the number of decimal places to be used.
 #' Use \code{"NULL"} for no rounding.
 #'
-#' @return List of matrices of posterior mean values for each parameter
+#' @return A List of matrices of posterior mean values for each parameter
 #'
 #' @author Adam Klimes
 #' @export
@@ -1173,7 +1175,7 @@ coef.PaGAnmesm <- function(object, digit = NULL){
 #'
 #' @param x an object of class "PaGAnmesm"
 #'
-#' @return Invisibly returns x
+#' @return Invisibly returns \code{x}
 #'
 #' @author Adam Klimes
 #' @export
@@ -1198,9 +1200,7 @@ print.PaGAnmesm <- function(x){
 #' @param object an object of class "PaGAnmesm"
 #' @param max.level integer giving maximal level of nesting of displayed structures
 #' @param give.attr logical indicating if attributes should be shown
-#' @param ... arguments passed to NextMethod
-#'
-#' @return Invisibly returns NULL
+#' @param ... arguments passed to \link[base]{NextMethod}
 #'
 #' @author Adam Klimes
 #' @export
@@ -1221,8 +1221,7 @@ str.PaGAnmesm <- function(object, max.level = 2, give.attr = FALSE, ...){
 #' @param x numeric vector
 #' @param extremes logical indicating if first and last values should be considered
 #'
-#'
-#' @return Positions of minima in x
+#' @return A vector of positions of minima in x
 #'
 #' @author Adam Klimes
 #' @keywords internal
@@ -1261,7 +1260,7 @@ findMin <- function(x, extremes = TRUE){
 #' \item{\code{tipStable}}{A list of lists of dataframes with
 #'   tipping points (state == 0) and stable states (state == 1), categorized
 #'   based on satifying the threshold (catSt == 1), with their scaled [0-1]
-#'   probability density and response valiable value}
+#'   probability density and response variable value}
 #' \item{\code{mats}}{array of stability landscapes}
 #' \item{\code{matsSt}}{list of scaled stability landscapes}
 #'
@@ -1347,7 +1346,16 @@ getMinMax <- function(slices, threshold = 0.0){
 #' @param getParsD logical value indicating if the output should be parameters
 #' of distributions instead of the slice
 #'
-#' @return Returns list of plotted values or parameter of distributions (if getParsD == TRUE)
+#' @return A list containing the following components:
+#' \itemize{
+#' \item{\code{chainX}}{One or more items of a matrix of probability density
+#' values along the response with a column for each \code{value}. One item is
+#' returned if \code{byChains} is not \code{TRUE}}, otherwise one item for each chain.
+#' \item{\code{resp}}{A vector of response values for which stability curves are
+#' evaluated}
+#'
+#'
+#' Returns list of plotted values or parameter of distributions (if getParsD == TRUE)
 #'
 #' @author Adam Klimes
 #' @export
@@ -1441,7 +1449,7 @@ sliceMESM <- function(mod, form = NULL, value = 0, byChains = TRUE,
     if (addEcos) points(tail(xx, -samples), tail(sliceDens, -samples), pch = 16)
   }
   if (doPlot) {
-    if (nrow(value) > 1) warning("Only the curve for the first value is plotted.")
+    if (nrow(value) > 1) warning("Only curve(s) for the first value is/are plotted.")
     yrange <- c(0, 1.05 * max(unlist(densOut)))
     plot(range(resp), yrange, type = "n", ylab = "Probability density",
       xlab = xlab, ylim = yrange, axes = FALSE, yaxs = "i")
@@ -1471,16 +1479,17 @@ sliceMESM <- function(mod, form = NULL, value = 0, byChains = TRUE,
 #' @param form formula with one predictor specifying which variables to plot
 #' @param threshold numerical value denoting minimum relative
 #'   importance of visualized stable states and tipping points
-#' @param addPoints logical value indicating if ecosystems should be visualized
+#' @param addPoints logical value indicating if observations should be visualized
 #' @param addMinMax logical value indicating if stable states and tipping points
 #' should be visualized
 #' @param randomSample integer specifying how many random samples from posterior
 #' distribution to take instead of mean. Use \code{"NULL"} for mean.
 #' @param otherPreds named vector of values of predictors not specified by form.
 #' Default are zeros
-#' @param ... parameters passed to image()
+#' @param ... parameters passed to \link[graphics]{image}
 #'
-#' @return Returns probability density matrix.
+#' @return Returns a list with scaled probability density matrix
+#' (for each \code{randomSample}).
 #'
 #' @author Adam Klimes
 #' @export
@@ -1514,7 +1523,10 @@ landscapeMESM <- function(mod, form = NULL, threshold = 0, addPoints = TRUE,
   matPlot <- if (!is.null(randomSample))
     apply(array(do.call(c, mats), dim = c(dim(mats[[1]]), length(mats))),
     2, apply, 1, sd) else mats[[1]]
-  image(grad, slices$resp, t(matPlot), ...)
+  arg <- list(...)
+  if (is.null(arg$xlab)) arg$xlab <- svar
+  if (is.null(arg$ylab)) arg$ylab <- names(mod$data)
+  do.call(image, c(list(grad), list(slices$resp), list(t(matPlot)), arg))
   box()
   plotMinMax <- function(tipStable, xCoors, state, col, cex = 0.5){
     selStates <- tipStable[tipStable$state == state & tipStable$catSt == 1, ]
@@ -1535,11 +1547,11 @@ landscapeMESM <- function(mod, form = NULL, threshold = 0, addPoints = TRUE,
 #' @description Random generation for the identified Multinomial Ecosystem State Model
 #'
 #' @param mod an object of class "PaGAnmesm"
-#' @param n number of observations per predictor value(s)
+#' @param n number of generated values per predictor value(s)
 #' @param newdata dataframe of predictor values of ecosystems to be predicted for.
 #'   If not provided, prediction is done for modelled data.
 #'
-#' @return ...
+#' @return A matrix with a column for each \code{n}
 #'
 #' @author Adam Klimes
 #' @export
