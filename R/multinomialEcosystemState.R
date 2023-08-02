@@ -1051,7 +1051,6 @@ summary.PaGAnmesm <- function(object, byChains = FALSE, digit = 4L,
     out <- lapply(varsSamples,
       function(x) t(x[sample(1:nrow(varsSamples[[1]]), randomSample), , drop = FALSE]))
   }
-  # if (length(out) == 1) out <- out[[1]]
   if (!is.null(digit)) out <- lapply(out, round, digit)
   out
 }
@@ -1188,7 +1187,6 @@ print.PaGAnmesm <- function(x){
   cat("Posterior mean values:\n")
   print(coef(x, 3))
   if (WAIC$pWAIC > 0.4) cat("[Warning] There are individual pWAIC values that are greater than 0.4. This may indicate that the WAIC estimate is unstable (Vehtari et al., 2017), at least in cases without grouping of data nodes or multivariate data nodes.\n")
-  # x$compiledModel$mcmcObject$getWAICdetails()
   invisible(x)
 }
 
@@ -1344,18 +1342,19 @@ getMinMax <- function(slices, threshold = 0.0){
 #' @param randomSample integer specifying how many random samples from posterior
 #' distribution to take instead of summary. Use \code{"NULL"} for summary.
 #' @param getParsD logical value indicating if the output should be parameters
-#' of distributions instead of the slice
+#' of distributions instead of the slice. Requires \code{doPlot} to be \code{FALSE}
 #'
 #' @return A list containing the following components:
 #' \itemize{
 #' \item{\code{chainX}}{One or more items of a matrix of probability density
 #' values along the response with a column for each \code{value}. One item is
-#' returned if \code{byChains} is not \code{TRUE}}, otherwise one item for each chain.
+#' returned if \code{byChains} is not \code{TRUE}, otherwise one item for each
+#' chain. If \code{getParsD} is \code{TRUE}, parameters for probability density
+#' distributions are returned instead.}
+#' \item{\code{densFun}}{If \code{getParsD} is \code{TRUE}, function for
+#' calculation of probability density is returned.}
 #' \item{\code{resp}}{A vector of response values for which stability curves are
 #' evaluated}
-#'
-#'
-#' Returns list of plotted values or parameter of distributions (if getParsD == TRUE)
 #'
 #' @author Adam Klimes
 #' @export
@@ -1386,6 +1385,7 @@ sliceMESM <- function(mod, form = NULL, value = 0, byChains = TRUE,
   if (!is.numeric(ecosTol)) stop("'ecosTol' has to be numeric")
   if (!is.numeric(samples)) stop("'samples' has to be numeric")
   if (!is.logical(getParsD)) stop("'getParsD' has to be logical")
+  if (getParsD & doPlot) stop("please set 'doPlot' to FALSE to use 'getParsD'")
   #_
   resp <- mod$data[[1]]
   parsTab <- summary(mod, byChains = byChains, absInt = TRUE, digit = NULL, randomSample = randomSample)
@@ -1394,6 +1394,10 @@ sliceMESM <- function(mod, form = NULL, value = 0, byChains = TRUE,
   invlink <- switch(as.character(mod$linkFunction), identity = function(x) x, log = exp,
     logit = function(x) exp(x)/(1+exp(x)), probit = pnorm, cloglog = function(x) 1 - exp(-exp(x)))
   xx <- seq(min(resp), max(resp), length.out = samples)
+  if (mod$errorModel == "negbinomial") {
+    xx <- seq(min(resp), max(resp), by = trunc((max(resp)-min(resp)+1) / samples) + 1)
+    samples <- length(xx)
+  }
   if (addEcos) {
     pred <- mod$constants[[svar]]
     xx <- c(xx, resp[abs(pred - value) < ecosTol])
@@ -1424,7 +1428,8 @@ sliceMESM <- function(mod, form = NULL, value = 0, byChains = TRUE,
     dfun <- switch(as.character(mod$errorModel),
                    gaussian = "dnorm",
                    gamma = "dgamma",
-                   beta = "dbeta")
+                   beta = "dbeta",
+                   negbinomial = "dnbinom")
     i <- 1:Nstates
     strFun <- paste0("(", paste(paste0("probs[", i, "] * ", dfun,
       "(x, ", "parOne[", i, "], ", "parTwo[", i, "])"), collapse = " + "), ")/", Nstates)
@@ -1438,12 +1443,13 @@ sliceMESM <- function(mod, form = NULL, value = 0, byChains = TRUE,
     parsD <- switch(as.character(mod$errorModel),
                     gaussian = parsVal,
                     gamma = array(rbind(aux^2/parsVal[, "sd", ]^2, aux/parsVal[, "sd", ]^2, parsVal[, "prob", ]), dim = auxDim),
-                    beta = array(rbind(aux*(aux*(1-aux)/parsVal[, "sd", ]^2-1), (aux*(1-aux)/parsVal[, "sd", ]^2-1)*(1-aux), parsVal[, "prob", ]), dim = auxDim))
+                    beta = array(rbind(aux*(aux*(1-aux)/parsVal[, "sd", ]^2-1), (aux*(1-aux)/parsVal[, "sd", ]^2-1)*(1-aux), parsVal[, "prob", ]), dim = auxDim),
+                    negbinomial = array(rbind(aux * aux / (parsVal[, "sd", ]^2 - aux), aux/parsVal[, "sd", ]^2, parsVal[, "prob", ]), dim = auxDim))
     if (getParsD) parsD else apply(parsD, 1, function(y) densFun(xx, y[1, ], y[2, ], y[3, ]))
   }
   parsValList <- lapply(parsTab, apply, 2, calcParsVal, value, mod, simplify = FALSE)
   densOut <- lapply(parsValList, lapply, calcDens, getParsD = getParsD)
-  if (getParsD) densOut <- list(densOut, densFun)
+  if (getParsD) densOut <- list(densOut, densFun = densFun)
   plotSlice <- function(sliceDens){
     lines(xx[1:samples], sliceDens[1:samples])
     if (addEcos) points(tail(xx, -samples), tail(sliceDens, -samples), pch = 16)
