@@ -257,7 +257,7 @@ modelSpecificationMultinomialEcosystemState <- function(
   numTrials <- NULL
   if(!is.null(dim(respValues))) {
     if(length(dim(respValues)) == 2) {
-      if(ncol(respValues == 1)) {
+      if(ncol(respValues) == 1) {
         # Treat a single column in a same way as a dimensionless
         respValues <- tryCatch(as.numeric(respValues), error = function(err) {
           stop("error thrown during processing of response variable: ", err)

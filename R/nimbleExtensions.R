@@ -643,11 +643,12 @@ dgammaStateValueMembership <- nimbleFunction(
     fullProb <- sum(inStateProb[1:numStates])
     # Reparameterise in terms of the canoconical NIMBLE parameterisation
     inShape <- inStatePrec[1:numStates] * inStateVal[1:numStates] * inStateVal[1:numStates]
-    inScale <- 1.0 / (inStatePrec[1:numStates] * inStateVal[1:numStates])
+#    inScale <- 1.0 / (inStatePrec[1:numStates] * inStateVal[1:numStates])
+    inRate <- inStatePrec[1:numStates] * inStateVal[1:numStates]
     # Intialise a vector of conditional probabilities for each state
     condStateProb <- numeric(length = numStates)
     for(stateIter in 1:numStates) {
-      condStateProb[stateIter] <- inStateProb[stateIter] * dgamma(x, inShape[stateIter], inScale[stateIter], log = FALSE)
+      condStateProb[stateIter] <- inStateProb[stateIter] * dgamma(x, inShape[stateIter], inRate[stateIter], log = FALSE)
     }
     # Intialise the output probability
     outProb <- sum(condStateProb[1:numStates]) / fullProb
@@ -866,8 +867,11 @@ dnegbinStateValueMembership <- nimbleFunction(
     # Calculate the total of the state probabilities
     fullProb <- sum(inStateProb[1:numStates])
     # Reparameterise in terms of the canoconical NIMBLE parameterisation
-    inProb <- 1.0 - inStateVal[1:numStates] * inStatePrec[1:numStates]
-    inSize <- inStateVal[1:numStates] * inStateVal[1:numStates] * inStatePrec[1:numStates] / inProb[1:numStates]
+#    inProb <- 1.0 - inStateVal[1:numStates] * inStatePrec[1:numStates]
+#    inSize <- inStateVal[1:numStates] * inStateVal[1:numStates] * inStatePrec[1:numStates] / inProb[1:numStates]
+# check parametrization!
+    inProb <- inStateVal[1:numStates] * inStatePrec[1:numStates]
+    inSize <- inStateVal[1:numStates] * inStateVal[1:numStates] * inStatePrec[1:numStates] / (1.0 - inProb[1:numStates])
     # Intialise a vector of conditional probabilities for each state
     condStateProb <- numeric(length = numStates)
     for(stateIter in 1:numStates) {
