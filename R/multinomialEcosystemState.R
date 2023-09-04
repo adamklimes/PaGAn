@@ -529,7 +529,8 @@ modelSpecificationMultinomialEcosystemState <- function(
       "gaussian" = paste("\t\t", respVariablesBUGS, "[dataIter] ~ dnorm(linStateVal[dataIter], linStatePrec[dataIter])", sep = ""),
       "gamma" = paste("\t\t", respVariablesBUGS, "[dataIter] ~ dgamma(mean = linStateVal[dataIter], sd = pow(linStatePrec[dataIter], -0.5))", sep = ""),
       "beta" = paste("\t\t", respVariablesBUGS, "[dataIter] ~ dbeta(mean = linStateVal[dataIter], sd = pow(linStatePrec[dataIter], -0.5))", sep = ""),
-      "negbinomial" = paste("\t\t", respVariablesBUGS, "[dataIter] ~ dnegbin(\n\t\t\t1.0 - linStateVal[dataIter] * linStatePrec[dataIter], \n\t\t\tlinStateVal[dataIter] * linStateVal[dataIter] * linStatePrec[dataIter] / (1.0 - linStateVal[dataIter] * linStatePrec[dataIter]))", sep = ""),
+#      "negbinomial" = paste("\t\t", respVariablesBUGS, "[dataIter] ~ dnegbin(\n\t\t\t1.0 - linStateVal[dataIter] * linStatePrec[dataIter], \n\t\t\tlinStateVal[dataIter] * linStateVal[dataIter] * linStatePrec[dataIter] / (1.0 - linStateVal[dataIter] * linStatePrec[dataIter]))", sep = ""),
+      "negbinomial" = paste("\t\t", respVariablesBUGS, "[dataIter] ~ dnegbin(\n\t\t\tlinStateVal[dataIter] * linStatePrec[dataIter], \n\t\t\tlinStateVal[dataIter] * linStateVal[dataIter] * linStatePrec[dataIter] / (1.0 - linStateVal[dataIter] * linStatePrec[dataIter]))", sep = ""),
       "betabinomial" = paste("\t\t", respVariablesBUGS, "[dataIter] ~ dbetabin(mean = linStateVal[dataIter], prec = linStatePrec[dataIter], size = numTrials[dataIter])")
     ), sep = "\n")
     # Create a vector of potential initial values for the model parameters
@@ -603,6 +604,79 @@ modelSpecificationMultinomialEcosystemState <- function(
     linkFunction = inLinkFunction,
     initialValues = initialValuesList
   )
+}
+
+### 1.2. ==== Check of initial values and generating new ones if necessary ====
+#' @title Check of initial values and generating new ones if necessary
+#'
+#' @description This function checks initial values and if they are illegitimate, it tries
+#' to generate new ones.
+#'
+#' @param stateValModels A formula describing the regression relationship between the mean
+#' ecosystem state value and the covariates for all ecosystem states, or a list of formulas
+#' with each element giving the regression relationship between the mean ecosystem state
+#' value and the covariates for each ecosystem state (ordered according to intercept of the
+#' ecosystem state value on the y-axis).
+#' @param statePrecModels A formula describing the regression relationship between the variance
+#' in the ecosystem state value and the covariates for all ecosystem states, or a list of
+#' formulas with each element giving the regression relationship between the variance in the
+#' ecosystem state value and the covariates for each ecosystem state (ordered according to
+#' intercept of the ecosystem state value on the y-axis).
+#' @param inputData A data frame containing the covariate information.
+#' @param setInit List of initial values. It is assumed that for each parameter, there is a vector
+#' of initial values with length corresponding to \code{Nstates}
+#' @param errorModel A string specifying the error distribution to be used
+#' in the model describing the ecosystem state value. This can be: \code{"gaussian"},
+#' \code{"gamma"}, \code{"beta"} or \code{"negbinomial"}.
+#' @param linkFunction A string specifying the link function. This can be: \code{"identity"},
+#' \code{"log"}, \code{"logit"}, \code{"probit"}, or \code{"cloglog"}.
+#' @param Nstates An integer specifying number of distributions in the mixture.
+#'
+#' @return A list of initial values
+#'
+#' @author Adam Klimes
+#' @keywords internal
+#'
+checkInit <- function(stateValModels, statePrecModels, inputData, setInit, errorModel, linkFunction, Nstates){
+  evalModMat <- function(modForm, formType, inputData, initVal, state){
+    if (is.list(modForm)) modForm <- modForm[[state]]
+    if (formType == "stateVal") initVal$intercept_stateVal <- cumsum(initVal$intercept_stateVal)
+    modMat <- model.matrix(modForm, inputData)
+    initNames <- paste0("_", formType, "$")
+    IDaux <- grep(initNames, names(initVal))
+    initAux <- initVal[IDaux]
+    names(initAux) <- sub(initNames, "", names(initAux))
+    names(initAux)[names(initAux) == "intercept"] <- "(Intercept)"
+    matchID <- match(colnames(modMat), names(initAux))
+    initAux <- initAux[matchID]
+    init <- unlist(lapply(initAux, function(x, state) x[state], state))
+    list(val = as.vector(modMat %*% init), ID = IDaux[matchID])
+  }
+  auxID <- grep("^intercept", names(setInit))
+  initVal <- c(setInit[auxID], setInit[-auxID])
+  checkFun <- switch(as.character(errorModel),
+                     gaussian = function(M, P) TRUE,
+                     gamma = function(M, P) M > 0 & P > 0,
+                     beta = function(M, P) {A <- M * M * (1 - M) * P - M; B <- M * (1 - M)^2 * P + M - 1; A > 0 & B > 0},
+                     negbinomial = function(M, P) {r <- M * M * P / (1 - P * M); r >= 0 & r <= 1})
+  invlink <- switch(as.character(linkFunction), identity = function(x) x, log = exp,
+                    logit = function(x) exp(x)/(1+exp(x)), probit = pnorm, cloglog = function(x) 1 - exp(-exp(x)))
+  genM <- function(x) rnorm(1, 0, 2)
+  genP <- if (errorModel == "beta") function(x) rnorm(1, if(x == 1) 6 else 0, 2) else function(x) rnorm(1, 0, 2)
+  updateItem <- function(x, state, fn) Map(function(x, ID, state, fn) {x[state] <- fn(ID); x}, x, 1:length(x), list(state), list(fn))
+  for (state in 1:Nstates){
+    i <- 1
+    repeat{
+      M <- evalModMat(stateValModels, "stateVal", inputData, initVal, state)
+      P <- evalModMat(statePrecModels, "statePrec", inputData, initVal, state)
+      if (all(checkFun(invlink(M$val), exp(P$val)))) break
+      i <- i + 1
+      if (i > 999) stop("Legitimate initial values fail to be fould automatically. You can provide them as an argument. Standardization of predictors might also help.")
+      initVal[M$ID] <- updateItem(initVal[M$ID], state, genM)
+      initVal[P$ID] <- updateItem(initVal[P$ID], state, genP)
+    }
+  }
+  initVal
 }
 
 ## 2. ------ DEFINE MODELLING FUNCTIONS ------
@@ -830,7 +904,23 @@ simulateMultinomialEcosystemState <- function(
 #' }
 #'
 #' @author Joseph D. Chipperfield, \email{joechip90@@googlemail.com}
-#' @keywords internal
+#' @examples \code{
+#' set.seed(10)
+#' n <- 200
+#' x <- rnorm(n)
+#' group <- rbinom(n, 1, 0.5)
+#' y <- rnorm(n, 1 + 0.5 * x * c(-1, 1)[group + 1], 0.1)
+#' plot(y ~ x)
+#' dat <- data.frame(x, y)
+#'
+#' mod <- fitMultinomialEcosystemState(
+#'   stateValModels = y ~ x,
+#'   stateProbModels = ~ x,
+#'   statePrecModels = ~ x,
+#'   inputData = dat,
+#'   numStates = 2)
+#' plot(mod)}
+#' @export
 #'
 fitMultinomialEcosystemState <- function(
   stateValModels,
@@ -859,14 +949,15 @@ fitMultinomialEcosystemState <- function(
   # Create a NIMBLE model specification
   modelSpecification <- modelSpecificationMultinomialEcosystemState(stateValModels, stateProbModels, statePrecModels, inputData, numStates, stateValError, setPriors)
   # Change initial values if provided
-  if (!is.null(setInit)) modelSpecification$initialValues <- setInit
+  modelSpecification$initialValues <- if (!is.null(setInit)) setInit else checkInit(stateValModels, statePrecModels, inputData, modelSpecification$initialValues, modelSpecification$errorModel, modelSpecification$linkFunction, modelSpecification$constants$numStates)
   modelObject <- nimbleModel(modelSpecification$modelCode, constants = modelSpecification$constants, data = modelSpecification$data, inits = modelSpecification$initialValues)
   # Build the MCMC object and compile it
   # varsToMonitor <- c(modelObject$getVarNames(), "linStateVal", "linStatePrec")
   # if (grepl("linStateProb", modelSpecification$modelText)) varsToMonitor <- c(varsToMonitor, "linStateProb")
   # Monitor only parameters
-  varsToMonitor <- modelObject$getVarNames()
-  varsToMonitor <- varsToMonitor[!varsToMonitor %in% c(names(modelSpecification$data), "linStateVal", "linStatePrec", "linStateProb")]
+  # varsToMonitor <- modelObject$getVarNames()
+  # varsToMonitor <- varsToMonitor[!varsToMonitor %in% c(names(modelSpecification$data), "linStateVal", "linStatePrec", "linStateProb")]
+  varsToMonitor <- names(modelSpecification$initialValues)
   mcmcObject <- buildMCMC(modelObject, enableWAIC = TRUE, monitors = varsToMonitor)
   mcmcObjectCompiled <- compileNimble(mcmcObject, modelObject)
   # Run the MCMC
@@ -949,6 +1040,7 @@ plot.PaGAnmesm <- function(x, form = NULL, byChains = TRUE, transCol = TRUE,
   if (addWAIC) text(par("usr")[2] - (par("usr")[2] - par("usr")[1]) * 0.2,
     max(resp) + 0.175 * auxRange, paste("WAIC:", round(x$mcmcSamples$WAIC$WAIC, 1)))
   parsTab <- summary(x, byChains = byChains, absInt = TRUE, digit = NULL)
+  parsTab <- lapply(parsTab, function(x) {x[is.na(x)] <- 0; x})
   auxLines <- function(parsChain, dat, mod){
     nstates <- mod$constants$numStates
     xx <- seq(min(dat[, svar]), max(dat[, svar]), length.out = 100)
@@ -1186,7 +1278,6 @@ print.PaGAnmesm <- function(x){
   cat("pWAIC:", WAIC$pWAIC, "\n")
   cat("Posterior mean values:\n")
   print(coef(x, 3))
-  if (WAIC$pWAIC > 0.4) cat("[Warning] There are individual pWAIC values that are greater than 0.4. This may indicate that the WAIC estimate is unstable (Vehtari et al., 2017), at least in cases without grouping of data nodes or multivariate data nodes.\n")
   invisible(x)
 }
 
@@ -1389,6 +1480,7 @@ sliceMESM <- function(mod, form = NULL, value = 0, byChains = TRUE,
   #_
   resp <- mod$data[[1]]
   parsTab <- summary(mod, byChains = byChains, absInt = TRUE, digit = NULL, randomSample = randomSample)
+  parsTab <- lapply(parsTab, function(x) {x[is.na(x)] <- 0; x})
   if (is.null(randomSample)) parsTab <- lapply(parsTab, function(x) x[, "mean", drop = FALSE])
   Nstates <- mod$constants$numStates
   invlink <- switch(as.character(mod$linkFunction), identity = function(x) x, log = exp,
@@ -1526,7 +1618,12 @@ landscapeMESM <- function(mod, form = NULL, threshold = 0, addPoints = TRUE,
   tipStableAll <- getMinMax(slices, threshold)
   tipStable <- tipStableAll$tipStable
   mats <- tipStableAll$matsSt
-  matPlot <- if (!is.null(randomSample))
+  is.one <- function(x) {
+    out <- !is.null(x)
+    if (out) out <- x == 1
+    out
+  }
+  matPlot <- if (!(is.null(randomSample) | is.one(randomSample)))
     apply(array(do.call(c, mats), dim = c(dim(mats[[1]]), length(mats))),
     2, apply, 1, sd) else mats[[1]]
   arg <- list(...)
