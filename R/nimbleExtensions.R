@@ -884,7 +884,7 @@ dnegbinStateValueMembership <- nimbleFunction(
         }
       }
       # Calculate the conditional probability
-      condStateProb[stateIter] <- inStateProb[stateIter] * dnbinom(x, inSize[stateIter], inProb[stateIter], FALSE)
+      condStateProb[stateIter] <- inStateProb[stateIter] * dnbinom(x, inSize[stateIter], inProb[stateIter], log = FALSE)
     }
     # Intialise the output probability
     outProb <- sum(condStateProb[1:numStates]) / fullProb
