@@ -631,13 +631,19 @@ modelSpecificationMultinomialEcosystemState <- function(
 #' @param linkFunction A string specifying the link function. This can be: \code{"identity"},
 #' \code{"log"}, \code{"logit"}, \code{"probit"}, or \code{"cloglog"}.
 #' @param Nstates An integer specifying number of distributions in the mixture.
+#' @param genNew A logical value specifying if new initial values should be generated even if
+#' \code{setInit} contains legitimate values.
+#' @param genFn A function used to generate new initial values. It has one argument which is
+#' the state and it should return one value. Note that for intercept of precision of beta
+#' distribution, \code{genFn(1) + 6} is used.
 #'
 #' @return A list of initial values
 #'
 #' @author Adam Klimes
 #' @keywords internal
 #'
-checkInit <- function(stateValModels, statePrecModels, inputData, setInit, errorModel, linkFunction, Nstates){
+checkInit <- function(stateValModels, statePrecModels, inputData, setInit,
+  errorModel, linkFunction, Nstates, genNew = FALSE, genFn = function(x) rnorm(1, 0, 2)){
   evalModMat <- function(modForm, formType, inputData, initVal, state){
     if (is.list(modForm)) modForm <- modForm[[state]]
     if (formType == "stateVal") initVal$intercept_stateVal <- cumsum(initVal$intercept_stateVal)
@@ -661,18 +667,24 @@ checkInit <- function(stateValModels, statePrecModels, inputData, setInit, error
                      negbinomial = function(M, P) {r <- M * M * P / (1 - P * M); r >= 0 & r <= 1})
   invlink <- switch(as.character(linkFunction), identity = function(x) x, log = exp,
                     logit = function(x) exp(x)/(1+exp(x)), probit = pnorm, cloglog = function(x) 1 - exp(-exp(x)))
-  genM <- function(x) rnorm(1, 0, 2)
-  genP <- if (errorModel == "beta") function(x) rnorm(1, if(x == 1) 6 else 0, 2) else function(x) rnorm(1, 0, 2)
+  genP <- if (errorModel == "beta") function(x) genFn(x) + c(0, 6)[(x == 1) + 1] else function(x) genFn(x)
   updateItem <- function(x, state, fn) Map(function(x, ID, state, fn) {x[state] <- fn(ID); x}, x, 1:length(x), list(state), list(fn))
   for (state in 1:Nstates){
     i <- 1
+    if (genNew) {
+      M <- evalModMat(stateValModels, "stateVal", inputData, initVal, state)
+      P <- evalModMat(statePrecModels, "statePrec", inputData, initVal, state)
+      initVal[M$ID] <- updateItem(initVal[M$ID], state, genFn)
+      initVal[P$ID] <- updateItem(initVal[P$ID], state, genP)
+      if (state > 1) initVal[grep("_stateProb$", names(initVal))] <- updateItem(initVal[grep("_stateProb$", names(initVal))], state, genFn)
+    }
     repeat{
       M <- evalModMat(stateValModels, "stateVal", inputData, initVal, state)
       P <- evalModMat(statePrecModels, "statePrec", inputData, initVal, state)
       if (all(checkFun(invlink(M$val), exp(P$val)))) break
       i <- i + 1
       if (i > 999) stop("Legitimate initial values fail to be fould automatically. You can provide them as an argument. Standardization of predictors might also help.")
-      initVal[M$ID] <- updateItem(initVal[M$ID], state, genM)
+      initVal[M$ID] <- updateItem(initVal[M$ID], state, genFn)
       initVal[P$ID] <- updateItem(initVal[P$ID], state, genP)
     }
   }
